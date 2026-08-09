@@ -1,0 +1,32 @@
+import { cn } from "@/lib/utils";
+
+interface StatCardProps {
+  title: string;
+  value: string | number;
+  subtitle?: string;
+  icon?: string;
+  trend?: "up" | "down" | "neutral";
+  className?: string;
+}
+
+export function StatCard({ title, value, subtitle, icon, trend, className }: StatCardProps) {
+  return (
+    <div className={cn("bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 hover:border-zinc-700 transition-all", className)}>
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-zinc-400">{title}</span>
+        {icon && <span className="text-xl">{icon}</span>}
+      </div>
+      <div className="text-2xl font-bold text-white mb-1">{value}</div>
+      {subtitle && (
+        <div className={cn(
+          "text-xs",
+          trend === "up" && "text-green-400",
+          trend === "down" && "text-red-400",
+          trend === "neutral" && "text-zinc-400"
+        )}>
+          {subtitle}
+        </div>
+      )}
+    </div>
+  );
+}
