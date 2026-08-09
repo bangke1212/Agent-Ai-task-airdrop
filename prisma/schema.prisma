@@ -1,0 +1,146 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id        String    @id @default(uuid())
+  email     String    @unique
+  name      String?
+  image     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  wallets        Wallet[]
+  accounts       Account[]
+  socialAccounts SocialAccount[]
+}
+
+model Account {
+  id                String  @id @default(uuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([provider, providerAccountId])
+}
+
+model SocialAccount {
+  id              String    @id @default(uuid())
+  userId          String
+  platform        String
+  username        String
+  displayName     String?
+  avatarUrl       String?
+  accessToken     String?
+  refreshToken    String?
+  tokenExpiresAt  DateTime?
+  isConnected     Boolean   @default(true)
+  isActive        Boolean   @default(true)
+  proxy           String?
+  metadata        String?
+  lastUsedAt      DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskLogs TaskLog[]
+  @@unique([userId, platform, username])
+}
+
+model Wallet {
+  id         String   @id @default(uuid())
+  userId     String
+  name       String
+  address    String   @unique
+  privateKey String
+  chain      String   @default("robinhood")
+  proxy      String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskLogs  TaskLog[]
+}
+
+model Airdrop {
+  id              String    @id @default(uuid())
+  projectName     String
+  description     String?
+  websiteUrl      String?
+  twitterUrl      String?
+  telegramUrl     String?
+  discordUrl      String?
+  tokenSymbol     String?
+  totalPoints     Float     @default(0)
+  potentialValue  Float?
+  status          String    @default("active")
+  priority        String    @default("medium")
+  category        String    @default("defi")
+  chain           String    @default("robinhood")
+  startDate       DateTime?
+  endDate         DateTime?
+  snapshotDate    DateTime?
+  tgeDate         DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  tasks  Task[]
+}
+
+model Task {
+  id            String    @id @default(uuid())
+  airdropId     String
+  title         String
+  description   String?
+  type          String
+  url           String?
+  status        String    @default("pending")
+  priority      Int       @default(0)
+  points        Float     @default(0)
+  retryCount    Int       @default(0)
+  maxRetries    Int       @default(3)
+  completedAt   DateTime?
+  scheduledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  airdrop  Airdrop   @relation(fields: [airdropId], references: [id], onDelete: Cascade)
+  logs     TaskLog[]
+}
+
+model TaskLog {
+  id              String    @id @default(uuid())
+  taskId          String
+  walletId        String?
+  socialAccountId String?
+  action          String
+  status          String
+  message         String?
+  txHash          String?
+  points          Float     @default(0)
+  duration        Int?
+  createdAt       DateTime  @default(now())
+  task          Task           @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  wallet        Wallet?        @relation(fields: [walletId], references: [id], onDelete: SetNull)
+  socialAccount SocialAccount? @relation(fields: [socialAccountId], references: [id], onDelete: SetNull)
+}
+
+model AgentLog {
+  id              String   @id @default(uuid())
+  level           String   @default("info")
+  message         String
+  airdropId       String?
+  taskId          String?
+  walletId        String?
+  socialAccountId String?
+  metadata        String?
+  createdAt       DateTime @default(now())
+}
