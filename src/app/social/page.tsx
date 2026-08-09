@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Trash2, Power, PowerOff, CheckCircle2, RefreshCw, MessageCircle, Bird, Send, Shield } from "lucide-react";
@@ -28,11 +29,12 @@ const platformConfig: Record<string,{name:string;icon:any;color:string;bg:string
 };
 
 export default function SocialAccountsPage() {
+  const { data: session } = useSession();
   const [accounts, setAccounts] = useState<SocialAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState({
-    platform: "twitter",
+    platform: "telegram",
     username: "",
     displayName: "",
     accessToken: "",
@@ -48,6 +50,56 @@ export default function SocialAccountsPage() {
   };
 
   useEffect(() => { fetchAccounts(); const i = setInterval(fetchAccounts, 5000); return () => clearInterval(i); }, []);
+
+  const handleOAuthConnect = (platform: string) => {
+    const w = 600, h = 700;
+    const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
+
+    if (platform === "twitter") {
+      signIn("twitter", { redirect: false, callbackUrl: window.location.origin + "/social" }).then((res) => {
+        if (res?.ok && res?.error === undefined) {
+          saveOAuthAccount(platform);
+        } else {
+          toast.error("Twitter OAuth cancelled");
+        }
+      }).catch(() => toast.error("Twitter OAuth failed"));
+    } else if (platform === "discord") {
+      signIn("discord", { redirect: false, callbackUrl: window.location.origin + "/social" }).then((res) => {
+        if (res?.ok && res?.error === undefined) {
+          saveOAuthAccount(platform);
+        } else {
+          toast.error("Discord OAuth cancelled");
+        }
+      }).catch(() => toast.error("Discord OAuth failed"));
+    } else {
+      // Telegram still manual
+      setFormData({ ...formData, platform });
+      setShowForm(true);
+    }
+  };
+
+  const saveOAuthAccount = async (platform: string) => {
+    const user = session?.user as any;
+    if (!user) return;
+    
+    try {
+      const res = await fetch("/api/social", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          platform,
+          username: user.username || user.name || "unknown",
+          displayName: user.name || user.username || "Unknown",
+          accessToken: user.accessToken || "",
+          metadata: null,
+        }),
+      });
+      if (res.ok) {
+        toast.success(platform + " connected!");
+        fetchAccounts();
+      }
+    } catch { toast.error("Failed to save"); }
+  };
 
   const testConn = async (a: SocialAccount) => {
     toast.loading("Testing...", { id: "t-" + a.id });
@@ -74,7 +126,7 @@ export default function SocialAccountsPage() {
     if (!formData.username) { toast.error("Username required"); return; }
     try {
       const r = await fetch("/api/social", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...formData, metadata: formData.metadata || null }) });
-      if (r.ok) { toast.success("Added!"); setShowForm(false); setFormData({ platform: "twitter", username: "", displayName: "", accessToken: "", proxy: "", metadata: "" }); fetchAccounts(); }
+      if (r.ok) { toast.success("Added!"); setShowForm(false); setFormData({ platform: "telegram", username: "", displayName: "", accessToken: "", proxy: "", metadata: "" }); fetchAccounts(); }
       else { const e = await r.json(); toast.error(e.error || "Failed"); }
     } catch { toast.error("Failed"); }
   };
@@ -86,10 +138,10 @@ export default function SocialAccountsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-2xl font-bold text-white">Social Accounts</h2>
-          <p className="text-sm text-zinc-400 mt-1">Connect Discord, Twitter, Telegram — paste your tokens to automate</p>
+          <p className="text-sm text-zinc-400 mt-1">Click to connect — OAuth popup for Twitter/Discord, form for Telegram</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm font-medium hover:opacity-90">
-          <Plus size={16} /> Connect Account
+        <button onClick={() => { setShowForm(!showForm); setFormData({ ...formData, platform: "telegram" }); }} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-lg text-sm font-medium hover:opacity-90">
+          <Plus size={16} /> Add Telegram
         </button>
       </div>
 
@@ -102,22 +154,15 @@ export default function SocialAccountsPage() {
         })}
       </div>
 
+      {/* Telegram form */}
       {showForm && (
         <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 mb-6">
-          <h3 className="text-sm font-semibold text-white mb-4">Connect New Social Account</h3>
-          <div className="flex gap-2 mb-4">
-            {Object.entries(platformConfig).map(([key, cfg]) => (
-              <button key={key} onClick={() => setFormData({ ...formData, platform: key })}
-                className={"flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium " + (formData.platform === key ? cfg.bg + " " + cfg.color + " border " + cfg.border : "text-zinc-400 hover:text-white hover:bg-zinc-800")}>
-                {cfg.icon} {cfg.name}
-              </button>
-            ))}
-          </div>
+          <h3 className="text-sm font-semibold text-white mb-4">Add Telegram Account</h3>
           <div className="grid grid-cols-2 gap-4">
             <div><label className="text-xs text-zinc-400 block mb-1">Username *</label><input value={formData.username} onChange={e => setFormData({ ...formData, username: e.target.value })} placeholder="@username" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 font-mono" /></div>
             <div><label className="text-xs text-zinc-400 block mb-1">Display Name</label><input value={formData.displayName} onChange={e => setFormData({ ...formData, displayName: e.target.value })} placeholder="Name" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300" /></div>
-            <div className="col-span-2"><label className="text-xs text-zinc-400 block mb-1">Access Token / API Key</label><input type="password" value={formData.accessToken} onChange={e => setFormData({ ...formData, accessToken: e.target.value })} placeholder="••••" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 font-mono" /></div>
-            <div className="col-span-2"><label className="text-xs text-zinc-400 block mb-1">Metadata JSON (optional)</label><textarea value={formData.metadata} onChange={e => setFormData({ ...formData, metadata: e.target.value })} placeholder='{"api_id":"123","api_hash":"abc"}' rows={3} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono resize-none" /></div>
+            <div className="col-span-2"><label className="text-xs text-zinc-400 block mb-1">Telegram Session String</label><input type="password" value={formData.accessToken} onChange={e => setFormData({ ...formData, accessToken: e.target.value })} placeholder="••••" className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-300 font-mono" /></div>
+            <div className="col-span-2"><label className="text-xs text-zinc-400 block mb-1">Metadata JSON (api_id, api_hash)</label><textarea value={formData.metadata} onChange={e => setFormData({ ...formData, metadata: e.target.value })} placeholder='{"api_id":"123","api_hash":"abc"}' rows={3} className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono resize-none" /></div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
             <button onClick={() => setShowForm(false)} className="px-4 py-2 text-sm text-zinc-400 hover:text-white">Cancel</button>
@@ -153,10 +198,9 @@ export default function SocialAccountsPage() {
                       </div>
                     </div>
                   ))}
-                  <button onClick={() => { setFormData({ ...formData, platform }); setShowForm(true); }} className="w-full flex items-center justify-center gap-2 mt-2 px-4 py-2 rounded-lg text-sm font-medium bg-white/5 text-zinc-300 border border-zinc-700 hover:bg-white/10"><Plus size={14} /> Add Another</button>
                 </div>
               ) : (
-                <button onClick={() => { setFormData({ ...formData, platform }); setShowForm(true); }} className="w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-lg font-semibold bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-600">
+                <button onClick={() => handleOAuthConnect(platform)} className="w-full flex items-center justify-center gap-3 px-5 py-3.5 rounded-lg font-semibold bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-600">
                   {cfg.icon}<span>Connect {cfg.name}</span>
                 </button>
               )}
@@ -169,27 +213,9 @@ export default function SocialAccountsPage() {
         <div className="text-center py-16">
           <Shield size={48} className="mx-auto mb-4 text-zinc-700" />
           <h3 className="text-lg font-medium text-white mb-2">No Social Accounts Connected</h3>
-          <p className="text-sm text-zinc-500 max-w-md mx-auto">Connect Discord, Twitter, and Telegram so the AI Agent can automate social tasks for airdrops.</p>
+          <p className="text-sm text-zinc-500 max-w-md mx-auto">Connect Twitter & Discord via OAuth, Telegram via manual setup.</p>
         </div>
       )}
-
-      <div className="mt-4 p-5 bg-zinc-900/80 border border-zinc-800 rounded-xl">
-        <h4 className="text-sm font-semibold text-white mb-3">How to Get Your Tokens</h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-zinc-400">
-          <div className="p-3 rounded-lg bg-sky-500/5 border border-sky-500/20">
-            <div className="flex items-center gap-2 mb-2"><Bird size={14} className="text-sky-400" /><span className="text-sky-400 font-medium">Twitter/X</span></div>
-            <ol className="space-y-1"><li>1. developer.twitter.com</li><li>2. Keys & Tokens</li><li>3. Paste Access Token</li></ol>
-          </div>
-          <div className="p-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20">
-            <div className="flex items-center gap-2 mb-2"><MessageCircle size={14} className="text-indigo-400" /><span className="text-indigo-400 font-medium">Discord</span></div>
-            <ol className="space-y-1"><li>1. discord.com/developers</li><li>2. Bot - Copy Token</li><li>3. Paste Bot Token</li></ol>
-          </div>
-          <div className="p-3 rounded-lg bg-blue-500/5 border border-blue-500/20">
-            <div className="flex items-center gap-2 mb-2"><Send size={14} className="text-blue-400" /><span className="text-blue-400 font-medium">Telegram</span></div>
-            <ol className="space-y-1"><li>1. my.telegram.org</li><li>2. api_id + api_hash</li><li>3. Paste in Metadata</li></ol>
-          </div>
-        </div>
-      </div>
     </AppLayout>
   );
 }

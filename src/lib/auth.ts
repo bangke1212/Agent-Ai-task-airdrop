@@ -1,20 +1,43 @@
 import NextAuth from "next-auth";
-import GitHub from "next-auth/providers/github";
-import Google from "next-auth/providers/google";
+import Twitter from "next-auth/providers/twitter";
+import Discord from "next-auth/providers/discord";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import prisma from "./prisma";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
-    GitHub({ clientId: process.env.AUTH_GITHUB_ID || "dummy", clientSecret: process.env.AUTH_GITHUB_SECRET || "dummy" }),
-    Google({ clientId: process.env.AUTH_GOOGLE_ID || "dummy", clientSecret: process.env.AUTH_GOOGLE_SECRET || "dummy" }),
+    Twitter({
+      clientId: process.env.AUTH_TWITTER_ID!,
+      clientSecret: process.env.AUTH_TWITTER_SECRET!,
+    }),
+    Discord({
+      clientId: process.env.AUTH_DISCORD_ID!,
+      clientSecret: process.env.AUTH_DISCORD_SECRET!,
+    }),
   ],
-  pages: { signIn: "/login" },
+  pages: {
+    signIn: "/login",
+  },
   callbacks: {
     session({ session, user }) {
-      if (session.user) { (session.user as any).id = user.id; }
+      if (session.user) {
+        (session.user as any).id = user.id;
+      }
       return session;
+    },
+    async jwt({ token, account, profile }) {
+      if (account) {
+        token.provider = account.provider;
+        token.accessToken = account.access_token;
+        token.refreshToken = account.refresh_token;
+        token.providerAccountId = account.providerAccountId;
+        if (profile) {
+          token.username = (profile as any).username || (profile as any).login;
+          token.image = (profile as any).avatar_url || (profile as any).profile_image_url;
+        }
+      }
+      return token;
     },
   },
 });
